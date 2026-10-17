@@ -21,7 +21,14 @@ from openai import OpenAI
 # TODO 1. Инструкции для модели: задача, правила, формат ответа.
 # Формат должен быть таким, чтобы программа могла надёжно достать из ответа
 # путь и новое содержимое каждого изменённого файла.
-INSTRUCTIONS = """..."""
+INSTRUCTIONS = """
+Исправь код по задаче. Меняй только то, что нужно для исправления.
+Верни только изменённые файлы целиком, без пояснений и без markdown.
+Каждый файл оформи так:
+<file path="относительный/путь.py">
+полное новое содержимое
+</file>
+""".strip()
 
 
 def build_context(workspace: Path) -> str:
@@ -33,7 +40,27 @@ def build_context(workspace: Path) -> str:
     - отделяйте файлы друг от друга разделителями с путём, например <file path="...">...</file>;
     - помните про окно контекста и цену: весь репозиторий отправлять не нужно.
     """
-    raise NotImplementedError
+    listing = subprocess.run(
+        ["git", "ls-files"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    blocks = []
+    for rel in listing.stdout.splitlines():
+        if not rel or ".git" in Path(rel).parts:
+            continue
+        path = workspace / rel
+        if not path.is_file() or path.stat().st_size > 100_000:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        blocks.append(f'<file path="{rel}">\n{text}\n</file>')
+    return "\n\n".join(blocks)
 
 
 def parse_files(answer: str) -> dict[str, str]:
@@ -41,7 +68,8 @@ def parse_files(answer: str) -> dict[str, str]:
 
     Разбор должен соответствовать формату из INSTRUCTIONS.
     """
-    raise NotImplementedError
+    pattern = re.compile(r'<file path="([^"]+)">\n(.*?)\n</file>', re.DOTALL)
+    return {path: content for path, content in pattern.findall(answer)}
 
 
 def write_files(workspace: Path, files: dict[str, str]) -> list[str]:
