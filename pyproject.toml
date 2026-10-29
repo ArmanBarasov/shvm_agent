@@ -1,0 +1,12 @@
+[project]
+name = "shvm-coder"
+version = "1.0.0"
+description = "Фазовый coding-агент для одной задачи SWE-bench"
+requires-python = ">=3.11"
+dependencies = [
+  "openai==2.26.0",
+  "pydantic==2.13.5",
+]
+
+[tool.uv]
+package = false
